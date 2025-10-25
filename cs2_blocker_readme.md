@@ -1,4 +1,4 @@
-# CS2 Steam Blocker v3.5
+# CS2 Steam Blocker v1.1
 
 > 🎮 自動阻擋 Steam 連線以防止 CS2 比賽中途被打斷的工具
 
@@ -180,12 +180,12 @@ C:\Program Files (x86)\Steam\steamapps\common\Counter-Strike Global Offensive\ga
 
 ## 📝 更新日誌
 
-### v3.5 (2024-10-25)
+### v1.1 (2024-10-25)
 - ✨ **修復中場問題**: 根據 Valve 官方 GSI API 正確處理 `intermission` 階段
 - 📚 改進註解說明與程式碼可讀性
 - 🎯 優化遊戲狀態判斷邏輯
 
-### v3.4
+### v1.0
 - 🔧 優化防火牆規則管理
 - 🎨 改進托盤圖示與選單
 - 🔔 新增音效通知系統
