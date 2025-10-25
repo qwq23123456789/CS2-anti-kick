@@ -34,7 +34,7 @@ class CS2SteamBlocker:
         self.firewall_rule_out = "CS2_Block_Steam_Out"
         self.firewall_rule_in = "CS2_Block_Steam_In"
         self.log("=" * 60)
-        self.log("CS2 Steam Blocker v3.4 - 修復版")
+        self.log("CS2 Steam Blocker v3.5 - 修復中場問題(官方API)")
         self.log("=" * 60)
         self.check_admin()
 
@@ -42,7 +42,7 @@ class CS2SteamBlocker:
         try:
             if not ctypes.windll.shell32.IsUserAnAdmin():
                 self.log("⚠️  需要管理員權限!")
-                self.show_notification("錯誤", "請以管理員身分執行")
+                self.show_notification("錯誤", "請以管理員身份執行")
         except:
             self.log("無法檢查權限")
 
@@ -168,10 +168,17 @@ class CS2SteamBlocker:
                 return
             map_data = data['map']
             phase = map_data.get('phase', '')
+            
             if phase != self.last_phase:
                 self.log(f"🗺️  地圖: {map_data.get('name', 'unknown')} | 階段: {phase}")
                 self.last_phase = phase
-            in_match = phase in ['live', 'warmup']
+            
+            # 根據 Valve 官方 GSI API 文件
+            # map.phase 可能值: 'warmup', 'live', 'intermission', 'gameover'
+            # 只有 'gameover' 或空值時才算離開比賽
+            # 'intermission' (中場休息) 應該保持阻擋
+            in_match = phase in ['warmup', 'live', 'intermission']
+            
             if in_match and not self.is_in_match:
                 self.is_in_match = True
                 self.play_sound("match_start")
@@ -221,7 +228,7 @@ class CS2SteamBlocker:
         try:
             with open(self.gsi_config_name, 'w', encoding='utf-8') as f:
                 f.write(config_content)
-            self.log(f"⚠️  GSI 配置檔創建在當前目錄，請複製到 CS2 cfg")
+            self.log(f"⚠️  GSI 配置檔創建在當前目錄,請複製到 CS2 cfg")
             return False
         except:
             self.log("❌ 創建 GSI 配置檔失敗")
@@ -241,7 +248,7 @@ class CS2SteamBlocker:
             self.log("✅ 全域快捷鍵已註冊 (僅小鍵盤 0-3)")
             self.show_notification("快捷鍵就緒", "按小鍵盤 0 測試")
         except:
-            self.log("❌ 快捷鍵註冊失敗，需管理員權限")
+            self.log("❌ 快捷鍵註冊失敗,需管理員權限")
 
     def create_tray_icon_image(self, color='#00ff00'):
         image = Image.new('RGB', (64, 64), color)
@@ -251,7 +258,7 @@ class CS2SteamBlocker:
 
     def create_tray_menu(self):
         def get_status_text(item):
-            game = "⚡ 比賽中" if self.is_in_match else "📋 大廳"
+            game = "⚡ 比賽中" if self.is_in_match else "🏛️ 大廳"
             steam = "🚫 已阻止" if self.steam_blocked else "✓ 正常"
             auto = "✓ 開啟" if self.auto_block else "✗ 關閉"
             return f"遊戲: {game} | Steam: {steam} | 自動: {auto}"
@@ -332,7 +339,7 @@ def start_gsi_server(blocker):
         blocker.log("✅ GSI 伺服器啟動 (127.0.0.1:3000)")
         server.serve_forever()
     except:
-        blocker.log("❌ 伺服器啟動失敗，端口 3000 可能被占")
+        blocker.log("❌ 伺服器啟動失敗,端口 3000 可能被佔")
 
 def print_startup_info():
     print("=" * 60)
@@ -344,6 +351,10 @@ def print_startup_info():
     print("  小鍵盤 3 - ⚙️  切換自動阻止")
     print("托盤圖示: 🟢 正常 | 🟠 比賽中 | 🔴 Steam 阻止")
     print("💡 先按小鍵盤 0 測試快捷鍵")
+    print("")
+    print("✨ v3.5 更新: 根據 Valve 官方 GSI API 修復中場問題")
+    print("   - warmup, live, intermission 階段保持阻擋")
+    print("   - 只有 gameover 時才解除阻擋")
     print("=" * 60)
 
 def main():
