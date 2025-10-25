@@ -5,3 +5,4 @@
 我的靈感來源
 [![YouTube 影片](https://img.youtube.com/vi/WMmYViISWg0/0.jpg)](https://www.youtube.com/watch?v=WMmYViISWg0)
 
+你可以在系統托盤管理他
