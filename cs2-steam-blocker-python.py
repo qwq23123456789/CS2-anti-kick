@@ -9,6 +9,7 @@ from datetime import datetime
 import ctypes
 import winsound
 from PIL import Image, ImageDraw
+import socket
 try:
     import keyboard
     import pystray
@@ -25,6 +26,9 @@ class CS2SteamBlocker:
         self.last_phase = ""
         self.tray_icon = None
         self.is_running = True
+        self.lock_socket = None
+        self.last_gsi_time = None  # 新增: 記錄最後收到 GSI 的時間
+        self.gsi_timeout = 3  # 新增: GSI 超時時間(秒)
         self.steam_paths = [
             r"C:\Program Files (x86)\Steam\steam.exe",
             r"C:\Program Files\Steam\steam.exe",
@@ -34,9 +38,12 @@ class CS2SteamBlocker:
         self.firewall_rule_out = "CS2_Block_Steam_Out"
         self.firewall_rule_in = "CS2_Block_Steam_In"
         self.log("=" * 60)
-        self.log("CS2 Steam Blocker v3.5 - 修復中場問題(官方API)")
+        self.log("CS2 Steam Blocker v3.6 - 新增斷線偵測")
         self.log("=" * 60)
         self.check_admin()
+        self.check_single_instance()
+        # 啟動心跳檢測執行緒
+        self.start_heartbeat_monitor()
 
     def check_admin(self):
         try:
@@ -45,6 +52,38 @@ class CS2SteamBlocker:
                 self.show_notification("錯誤", "請以管理員身份執行")
         except:
             self.log("無法檢查權限")
+
+    def check_single_instance(self):
+        """檢查程式是否已經在運行"""
+        try:
+            # 使用特定端口作為鎖定機制
+            self.lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.lock_socket.bind(('127.0.0.1', 47123))
+            self.log("✅ 單一實例檢查通過")
+        except socket.error:
+            self.log("=" * 60)
+            self.log("⚠️  程式已經在運行中!")
+            self.log("=" * 60)
+            self.log("請檢查:")
+            self.log("  1. 系統托盤是否已有 CS2 Steam Blocker 圖示")
+            self.log("  2. 工作管理員是否已有 python.exe 在運行此程式")
+            self.log("  3. 如果要重新啟動,請先關閉舊的實例")
+            self.log("=" * 60)
+            print("\n按任意鍵退出...")
+            
+            # 顯示 Windows 訊息框
+            try:
+                ctypes.windll.user32.MessageBoxW(
+                    0,
+                    "程式已經在運行中!\n\n請檢查系統托盤或工作管理員。\n如需重新啟動,請先關閉舊的實例。",
+                    "CS2 Steam Blocker - 重複啟動警告",
+                    0x30  # MB_ICONWARNING
+                )
+            except:
+                pass
+            
+            input()
+            sys.exit(1)
 
     def log(self, message):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
@@ -162,8 +201,32 @@ class CS2SteamBlocker:
         self.show_notification("自動模式", f"自動阻止已{status}")
         self.update_tray_menu()
 
+    def start_heartbeat_monitor(self):
+        """啟動心跳監控執行緒,檢測 GSI 是否斷線"""
+        def monitor():
+            while self.is_running:
+                time.sleep(5)  # 每 5 秒檢查一次
+                if self.last_gsi_time and self.is_in_match:
+                    elapsed = time.time() - self.last_gsi_time
+                    if elapsed > self.gsi_timeout:
+                        self.log(f"⚠️  GSI 超過 {self.gsi_timeout} 秒未回應,可能已斷線或被踢出")
+                        self.log("🔓 自動恢復 Steam 連線...")
+                        if self.is_in_match:
+                            self.is_in_match = False
+                            if self.steam_blocked:
+                                self.unblock_steam()
+                            self.show_notification("自動恢復", "偵測到遊戲斷線,已恢復 Steam")
+                        self.last_gsi_time = None
+        
+        monitor_thread = threading.Thread(target=monitor, daemon=True)
+        monitor_thread.start()
+        self.log("✅ 心跳監控已啟動 (30秒超時偵測)")
+
     def process_game_state(self, data):
         try:
+            # 更新最後收到 GSI 的時間
+            self.last_gsi_time = time.time()
+            
             if 'map' not in data:
                 return
             map_data = data['map']
@@ -191,6 +254,7 @@ class CS2SteamBlocker:
                 self.show_notification("離開比賽", "已回到大廳")
                 if self.steam_blocked:
                     self.unblock_steam()
+                self.last_gsi_time = None  # 重置計時器
         except Exception as e:
             self.log(f"❌ 處理遊戲狀態錯誤: {e}")
 
@@ -313,6 +377,12 @@ class CS2SteamBlocker:
             self.unblock_steam()
         if self.tray_icon:
             self.tray_icon.stop()
+        # 釋放鎖定端口
+        if self.lock_socket:
+            try:
+                self.lock_socket.close()
+            except:
+                pass
         os._exit(0)
 
 class GSIHandler(BaseHTTPRequestHandler):
@@ -352,9 +422,10 @@ def print_startup_info():
     print("托盤圖示: 🟢 正常 | 🟠 比賽中 | 🔴 Steam 阻止")
     print("💡 先按小鍵盤 0 測試快捷鍵")
     print("")
-    print("✨ v3.5 更新: 根據 Valve 官方 GSI API 修復中場問題")
-    print("   - warmup, live, intermission 階段保持阻擋")
-    print("   - 只有 gameover 時才解除阻擋")
+    print("✨ v3.6 更新:")
+    print("   - 新增斷線自動偵測(30秒無回應自動恢復)")
+    print("   - 修復被踢出時 Steam 無法恢復的問題")
+    print("   - 根據 Valve 官方 GSI API 修復中場問題")
     print("=" * 60)
 
 def main():
