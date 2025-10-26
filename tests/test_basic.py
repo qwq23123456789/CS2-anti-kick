@@ -21,19 +21,3 @@ def test_import_basic_modules():
     assert json is not None
     assert sys is not None
     assert os is not None
-```
-
----
-
-## 📂 檢查資料夾結構
-
-現在你的專案應該長這樣:
-```
-你的專案/
-├── cs2-steam-blocker-python.py
-├── tests/
-│   ├── __init__.py          ← 空白文件
-│   └── test_basic.py        ← 剛剛創建的測試
-└── .github/
-    └── workflows/
-        └── test.yml
